@@ -274,6 +274,81 @@ namespace ActiveTextureManagement
             tex.Apply(mipmaps, false);
         }
 
+        // DDS Texture loader inspired by
+        // http://answers.unity3d.com/questions/555984/can-you-load-dds-textures-during-runtime.html#answer-707772
+        // http://msdn.microsoft.com/en-us/library/bb943992.aspx
+        // does not rescale and such atm
+        public static void DDSToTexture(TexInfo Texture, bool mipmaps)
+        {
+            GameDatabase.TextureInfo texture = Texture.texture;
+            TextureConverter.InitImageBuffer();
+            using (BinaryReader reader = new BinaryReader(File.Open(Texture.filename, FileMode.Open, FileAccess.Read)))
+            {
+                int dwMagic = (int)reader.ReadUInt32();
+
+                int dwSize = (int)reader.ReadUInt32();
+
+                //this header byte should be 124 for DDS image files
+                if (dwSize != 124)
+                    throw new Exception("Invalid DDS DXTn texture. Unable to read");
+
+                int dwFlags = (int)reader.ReadUInt32();
+                int dwWidth = (int)reader.ReadUInt32();
+                int dwHeight = (int)reader.ReadUInt32();
+                int dwPitchOrLinearSize = (int)reader.ReadUInt32();
+                int dwDepth = (int)reader.ReadUInt32();
+                int dwMipMapCount = (int)reader.ReadUInt32();
+
+                // dwReserved1 
+                for (int i=0;i<11;i++)
+                    reader.ReadUInt32();
+                // DDS_PIXELFORMAT 
+                int dds_pxlf_dwSize = (int)reader.ReadUInt32();
+                int dds_pxlf_dwFlags = (int)reader.ReadUInt32();
+                byte[] dds_pxlf_dwFourCC = reader.ReadBytes(4);
+                string fourCC = Encoding.ASCII.GetString(dds_pxlf_dwFourCC);
+                int dds_pxlf_dwRGBBitCount = (int)reader.ReadUInt32();
+                int dds_pxlf_dwRBitMask = (int)reader.ReadUInt32();
+                int dds_pxlf_dwGBitMask = (int)reader.ReadUInt32();
+                int dds_pxlf_dwBBitMask = (int)reader.ReadUInt32();
+                int dds_pxlf_dwABitMask = (int)reader.ReadUInt32();
+
+                int dwCaps = (int)reader.ReadUInt32();
+                int dwCaps2 = (int)reader.ReadUInt32();
+                int dwCaps3 = (int)reader.ReadUInt32();
+                int dwCaps4 = (int)reader.ReadUInt32();
+                int dwReserved2 = (int)reader.ReadUInt32();
+
+                long dxtBytesLength = reader.BaseStream.Length - 128;
+                TextureFormat textureFormat = TextureFormat.ARGB32;
+
+                // For now do as if there was no mipmap since I don't 
+                // know if they are actually loaded with LoadRawTextureData
+                if (fourCC == "DXT1")
+                {
+                    textureFormat = TextureFormat.DXT1;
+                    dxtBytesLength = dwWidth * dwHeight / 8;
+                }
+                else if (fourCC == "DXT5")
+                {
+                    textureFormat = TextureFormat.DXT5;
+                    dxtBytesLength = dwWidth * dwHeight / 4;
+                }
+                byte[] dxtBytes = reader.ReadBytes((int)dxtBytesLength);
+
+                if (textureFormat == TextureFormat.DXT1 || textureFormat ==TextureFormat.DXT5)
+                {
+                    texture.texture = new Texture2D(dwWidth, dwHeight, textureFormat, false);
+                    texture.texture.LoadRawTextureData(dxtBytes);
+                    texture.texture.Apply();
+                }
+            }
+
+        }
+
+
+
+
         public static void IMGToTexture(TexInfo Texture, bool mipmaps, bool isNormalFormat)
         {
             GameDatabase.TextureInfo texture = Texture.texture;
@@ -457,6 +532,7 @@ namespace ActiveTextureManagement
             String pngPathTruecolor = KSPUtil.ApplicationRootPath + "GameData/" + Texture.name + ".truecolor";
             String jpgPath = KSPUtil.ApplicationRootPath + "GameData/" + Texture.name + ".jpg";
             String tgaPath = KSPUtil.ApplicationRootPath + "GameData/" + Texture.name + ".tga";
+            String ddsPath = KSPUtil.ApplicationRootPath + "GameData/" + Texture.name + ".dds";
             if (File.Exists(pngPath) || File.Exists(pngPathTruecolor) || File.Exists(jpgPath) || File.Exists(tgaPath) || File.Exists(mbmPath))
             {
                 Texture2D tex = new Texture2D(2, 2);
@@ -497,7 +573,11 @@ namespace ActiveTextureManagement
                 {
                     Texture.filename = mbmPath;
                     MBMToTexture(Texture, mipmaps);
-                   
+                }
+                else if (File.Exists(ddsPath))
+                {
+                    Texture.filename = ddsPath;
+                    DDSToTexture(Texture, mipmaps);
                 }
                 tex.name = newTexture.name;
             }
