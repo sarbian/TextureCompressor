@@ -1,8 +1,10 @@
 ﻿using System;
 using System.Collections;
 using System.Collections.Generic;
+using System.Globalization;
 using System.IO;
 using System.Linq;
+using System.Reflection;
 using System.Text;
 using System.Text.RegularExpressions;
 using UnityEngine;
@@ -81,6 +83,57 @@ namespace ActiveTextureManagement
         }
     }
 
+
+    [DatabaseLoaderAttrib(new string[] { "png", "tga", "mbm", "jpg", "jpeg", "truecolor" })]
+    public class DatabaseLoaderTexture_ATM : DatabaseLoader<GameDatabase.TextureInfo>
+    {
+        
+        // Quick test to use ATM loading. not working but I did not had the time to look into it
+        // Most likely something more need to be initialized
+        //public override IEnumerator Load(UrlDir.UrlFile urlFile, FileInfo file)
+        //{
+        //    TexInfo texInfo = new TexInfo(urlFile.url);
+        //    obj = ActiveTextureManagement.UpdateTexture(texInfo);
+        //    successful = true;
+        //    yield return null;
+        //}
+
+        // copy of stock png loading 
+        // Works (only for png obviously)
+        public override IEnumerator Load(UrlDir.UrlFile urlFile, FileInfo file)
+        {
+            ActiveTextureManagement.Log(urlFile.url);
+        
+            WWW www = new WWW(string.Concat("file://", file.FullName));
+            
+            if (www.error != null)
+            {
+                ActiveTextureManagement.Log("PNG_ATM Texture load error in '" + file.FullName + "': " + www.error);
+                successful = false;
+                obj = null;
+            }
+            else if (!Path.GetFileNameWithoutExtension(file.Name).EndsWith("NRM"))
+            {
+                Texture2D texture2D = www.texture;
+                texture2D.Compress(false);
+                texture2D.Apply();
+                GameDatabase.TextureInfo textureInfo = new GameDatabase.TextureInfo(texture2D, false, true, true);
+                obj = textureInfo;
+                successful = true;
+                ActiveTextureManagement.Log("PNG_ATM Texture loaded '" + file.FullName + "' " + texture2D.width + "x" + texture2D.height);
+            }
+            else
+            {
+                GameDatabase.TextureInfo textureInfo = new GameDatabase.TextureInfo(GameDatabase.BitmapToUnityNormalMap(www.texture), true, false, true);
+                obj = textureInfo;
+                successful = true;
+                ActiveTextureManagement.Log("PNG_ATM Texture loaded as normal '" + file.FullName + "' " + www.texture.width + "x" + www.texture.height);
+            }
+            yield return null;
+        }
+         
+    }
+
     [KSPAddon(KSPAddon.Startup.EveryScene, false)]
     public class ActiveTextureManagement : MonoBehaviour
     {
@@ -112,17 +165,23 @@ namespace ActiveTextureManagement
         static FilterMode config_filter_mode = FilterMode.Bilinear;
         static bool config_make_not_readable = false;
 
-  
+        private static bool LoadTexturesIsDone = false;
 
-        protected void Awake()
+
+
+        // Start is called a bit later than Awake and all the
+        // object we have to edit are now initialized
+        protected void Start()
         {
             if (HighLogic.LoadedScene == GameScenes.LOADING)
             {
-                PopulateConfig();
-                //LoadTextures();
-                //Compressed = true;
+                SetupLoaders();
             }
-            else if (HighLogic.LoadedScene == GameScenes.MAINMENU && !Compressed)
+        }
+
+        protected void Awake()
+        {
+            if (HighLogic.LoadedScene == GameScenes.MAINMENU && !Compressed)
             {
                 Update();
                 Compressed = true;
@@ -150,31 +209,26 @@ namespace ActiveTextureManagement
             }
         }
 
-        private void LoadTextures(){
-            UrlDir.UrlConfig[] INTERNALS = GameDatabase.Instance.GetConfigs("ACTIVE_TEXTURE_MANAGER");
-            UrlDir.UrlConfig node = INTERNALS[0];
-            {
-                List<UrlDir.UrlFile> FilesToRemove = new List<UrlDir.UrlFile>();
-                foreach (var file in GameDatabase.Instance.root.AllFiles)
-                {
-                    if (fileIsTexture(file) && foldersList.Exists(n => file.url.StartsWith(n)))
-                    {
-                        TexInfo t = new TexInfo(file.url);
-                        GameDatabase.TextureInfo Texture = UpdateTexture(t);
-                        GameDatabase.Instance.databaseTexture.Add(Texture);
-                        FilesToRemove.Add(file);
-                        
-                    }
-                }
-                foreach (var file in FilesToRemove)
-                {
-                    file.parent.files.Remove(file);
-                }
-                LastTextureIndex = GameDatabase.Instance.databaseTexture.Count - 1;
-            }
-            
-	    }
+        private void SetupLoaders()
+        {
 
+            // Get the list where the Texture DatabaseLoader are stored
+            Type gdType = typeof(GameDatabase);
+            List<DatabaseLoader<GameDatabase.TextureInfo>> textureLoaders =
+                (from fld in gdType.GetFields(BindingFlags.Instance | BindingFlags.NonPublic)
+                 where fld.FieldType == typeof(List<DatabaseLoader<GameDatabase.TextureInfo>>)
+                 select (List<DatabaseLoader<GameDatabase.TextureInfo>>)fld.GetValue(GameDatabase.Instance)).FirstOrDefault();
+
+            foreach (var textureLoader in textureLoaders)
+            {
+                if (textureLoader.GetType().Name != "DatabaseLoaderTexture_ATM")
+                {
+                    Log("Disabling " + textureLoader.GetType().Name);
+                    textureLoader.extensions.Clear();
+                }
+            }
+        }
+        
         private bool fileIsTexture(UrlDir.UrlFile file)
         {
             return file.fileExtension == "mbm" ||
@@ -256,34 +310,7 @@ namespace ActiveTextureManagement
 
         protected void Update()
         {
-            if ( LastTextureIndex <= GameDatabase.Instance.databaseTexture.Count - 1)
-            {
-                int LocalLastTextureIndex = GameDatabase.Instance.databaseTexture.Count-1;
-                if (LastTextureIndex != LocalLastTextureIndex)
-                {
-                    for (int i = LastTextureIndex + 1; i < GameDatabase.Instance.databaseTexture.Count; i++)
-                    {
-                        GameDatabase.TextureInfo Texture = GameDatabase.Instance.databaseTexture[i];
-                        LastTextureIndex = i;
-                        int width = Texture.texture.width;
-                        int height = Texture.texture.height;
-                        TextureFormat format = Texture.texture.format;
-                        bool mipmaps = Texture.texture.mipmapCount != 0;
-                        TexInfo t = new TexInfo(Texture.name);
-                        GameDatabase.TextureInfo texture = UpdateTexture(t);
-                        GameDatabase.Instance.ReplaceTexture(Texture.name, texture);
-                        gcCount++;
-                        updateMemoryCount(width, height, format, mipmaps, texture, "");
-                    }
-                    if (gcCount > GC_COUNT_TRIGGER)
-                    {
-                        System.GC.Collect();
-                        gcCount = 0;
-                    }
-                }
-                
-            }
-            else if (HighLogic.LoadedScene == GameScenes.MAINMENU)
+            if (HighLogic.LoadedScene == GameScenes.MAINMENU)
             {
                 bool alt = (Input.GetKey(KeyCode.LeftAlt) || Input.GetKey(KeyCode.RightAlt));
                 if (alt && Input.GetKeyDown(KeyCode.M))
