@@ -90,47 +90,47 @@ namespace ActiveTextureManagement
         
         // Quick test to use ATM loading. not working but I did not had the time to look into it
         // Most likely something more need to be initialized
-        //public override IEnumerator Load(UrlDir.UrlFile urlFile, FileInfo file)
-        //{
-        //    TexInfo texInfo = new TexInfo(urlFile.url);
-        //    obj = ActiveTextureManagement.UpdateTexture(texInfo);
-        //    successful = true;
-        //    yield return null;
-        //}
+        public override IEnumerator Load(UrlDir.UrlFile urlFile, FileInfo file)
+        {
+            TexInfo texInfo = new TexInfo(urlFile.url);
+            obj = ActiveTextureManagement.UpdateTexture(texInfo);
+            successful = true;
+            yield return null;
+        }
 
         // copy of stock png loading 
         // Works (only for png obviously)
-        public override IEnumerator Load(UrlDir.UrlFile urlFile, FileInfo file)
-        {
-            ActiveTextureManagement.Log(urlFile.url);
-        
-            WWW www = new WWW(string.Concat("file://", file.FullName));
-            
-            if (www.error != null)
-            {
-                ActiveTextureManagement.Log("PNG_ATM Texture load error in '" + file.FullName + "': " + www.error);
-                successful = false;
-                obj = null;
-            }
-            else if (!Path.GetFileNameWithoutExtension(file.Name).EndsWith("NRM"))
-            {
-                Texture2D texture2D = www.texture;
-                texture2D.Compress(false);
-                texture2D.Apply();
-                GameDatabase.TextureInfo textureInfo = new GameDatabase.TextureInfo(texture2D, false, true, true);
-                obj = textureInfo;
-                successful = true;
-                ActiveTextureManagement.Log("PNG_ATM Texture loaded '" + file.FullName + "' " + texture2D.width + "x" + texture2D.height);
-            }
-            else
-            {
-                GameDatabase.TextureInfo textureInfo = new GameDatabase.TextureInfo(GameDatabase.BitmapToUnityNormalMap(www.texture), true, false, true);
-                obj = textureInfo;
-                successful = true;
-                ActiveTextureManagement.Log("PNG_ATM Texture loaded as normal '" + file.FullName + "' " + www.texture.width + "x" + www.texture.height);
-            }
-            yield return null;
-        }
+        //public override IEnumerator Load(UrlDir.UrlFile urlFile, FileInfo file)
+        //{
+        //    ActiveTextureManagement.Log(urlFile.url);
+        //
+        //    WWW www = new WWW(string.Concat("file://", file.FullName));
+        //    
+        //    if (www.error != null)
+        //    {
+        //        ActiveTextureManagement.Log("PNG_ATM Texture load error in '" + file.FullName + "': " + www.error);
+        //        successful = false;
+        //        obj = null;
+        //    }
+        //    else if (!Path.GetFileNameWithoutExtension(file.Name).EndsWith("NRM"))
+        //    {
+        //        Texture2D texture2D = www.texture;
+        //        texture2D.Compress(false);
+        //        texture2D.Apply();
+        //        GameDatabase.TextureInfo textureInfo = new GameDatabase.TextureInfo(texture2D, false, true, true);
+        //        obj = textureInfo;
+        //        successful = true;
+        //        ActiveTextureManagement.Log("PNG_ATM Texture loaded '" + file.FullName + "' " + texture2D.width + "x" + texture2D.height);
+        //    }
+        //    else
+        //    {
+        //        GameDatabase.TextureInfo textureInfo = new GameDatabase.TextureInfo(GameDatabase.BitmapToUnityNormalMap(www.texture), true, false, true);
+        //        obj = textureInfo;
+        //        successful = true;
+        //        ActiveTextureManagement.Log("PNG_ATM Texture loaded as normal '" + file.FullName + "' " + www.texture.width + "x" + www.texture.height);
+        //    }
+        //    yield return null;
+        //}
          
     }
 
@@ -175,6 +175,7 @@ namespace ActiveTextureManagement
         {
             if (HighLogic.LoadedScene == GameScenes.LOADING)
             {
+                PopulateConfig();
                 SetupLoaders();
             }
         }
