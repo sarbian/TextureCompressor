@@ -277,6 +277,7 @@ namespace ActiveTextureManagement
         // DDS Texture loader inspired by
         // http://answers.unity3d.com/questions/555984/can-you-load-dds-textures-during-runtime.html#answer-707772
         // http://msdn.microsoft.com/en-us/library/bb943992.aspx
+        // http://msdn.microsoft.com/en-us/library/windows/desktop/bb205578(v=vs.85).aspx
         // does not rescale and such atm
         public static void DDSToTexture(TexInfo Texture, bool mipmaps)
         {
@@ -293,8 +294,8 @@ namespace ActiveTextureManagement
                     throw new Exception("Invalid DDS DXTn texture. Unable to read");
 
                 int dwFlags = (int)reader.ReadUInt32();
-                int dwWidth = (int)reader.ReadUInt32();
                 int dwHeight = (int)reader.ReadUInt32();
+                int dwWidth = (int)reader.ReadUInt32();
                 int dwPitchOrLinearSize = (int)reader.ReadUInt32();
                 int dwDepth = (int)reader.ReadUInt32();
                 int dwMipMapCount = (int)reader.ReadUInt32();
@@ -327,18 +328,16 @@ namespace ActiveTextureManagement
                 if (fourCC == "DXT1")
                 {
                     textureFormat = TextureFormat.DXT1;
-                    dxtBytesLength = dwWidth * dwHeight / 8;
                 }
                 else if (fourCC == "DXT5")
                 {
                     textureFormat = TextureFormat.DXT5;
-                    dxtBytesLength = dwWidth * dwHeight / 4;
                 }
                 byte[] dxtBytes = reader.ReadBytes((int)dxtBytesLength);
 
                 if (textureFormat == TextureFormat.DXT1 || textureFormat ==TextureFormat.DXT5)
                 {
-                    texture.texture = new Texture2D(dwWidth, dwHeight, textureFormat, false);
+                    texture.texture = new Texture2D(dwWidth, dwHeight, textureFormat, dwMipMapCount > 0);
                     texture.texture.LoadRawTextureData(dxtBytes);
                     texture.texture.Apply();
                 }
